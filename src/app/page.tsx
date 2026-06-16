@@ -7,13 +7,44 @@ import { useVault } from '../utils/VaultContext';
 import Dashboard from '../components/Dashboard';
 
 export default function Home() {
-  const { user, encryptionKey, setEncryptionKey, loading: contextLoading } = useVault();
+  const {
+    user,
+    encryptionKey,
+    setEncryptionKey,
+    loading: contextLoading,
+    isBiometricEnrolled,
+    biometricSupported,
+    getStoredCredentials,
+    enrollBiometrics,
+    biometryType
+  } = useVault();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showBiometricEnroll, setShowBiometricEnroll] = useState(false);
+  const [tempCredentials, setTempCredentials] = useState<{e: string, p: string} | null>(null);
+
+  const handleLoginLogic = async (emailInput: string, passwordInput: string) => {
+    const { authHash, encryptionKey: generatedKeyB } = await deriveKeys(passwordInput, emailInput);
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: emailInput.toLowerCase(),
+      password: authHash,
+    });
+
+    if (error) throw error;
+
+    setEncryptionKey(generatedKeyB);
+
+    // If biometric is supported but not enrolled, ask user
+    if (biometricSupported && !isBiometricEnrolled) {
+      setTempCredentials({ e: emailInput, p: passwordInput });
+      setShowBiometricEnroll(true);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,9 +52,8 @@ export default function Home() {
     setLoading(true);
 
     try {
-      const { authHash, encryptionKey: generatedKeyB } = await deriveKeys(password, email);
-      
       if (isSignUp) {
+        const { authHash } = await deriveKeys(password, email);
         const { error } = await supabase.auth.signUp({
           email: email.toLowerCase(),
           password: authHash,
@@ -32,18 +62,39 @@ export default function Home() {
         if (error) throw error;
         setMessage({ type: 'success', text: 'Account created! You can now toggle to log in.' });
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: email.toLowerCase(),
-          password: authHash,
-        });
-
-        if (error) throw error;
-        setEncryptionKey(generatedKeyB);
+        await handleLoginLogic(email, password);
       }
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message || 'Authentication failed.' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBiometricLogin = async () => {
+    setMessage(null);
+    setLoading(true);
+    try {
+      const creds = await getStoredCredentials();
+      if (creds) {
+        await handleLoginLogic(creds.email, creds.password);
+      }
+    } catch (error: any) {
+      setMessage({ type: 'error', text: 'Biometric authentication failed.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEnrollConfirm = async () => {
+    if (tempCredentials) {
+      try {
+        await enrollBiometrics(tempCredentials.p, tempCredentials.e);
+        setShowBiometricEnroll(false);
+        setTempCredentials(null);
+      } catch (e) {
+        console.error(e);
+      }
     }
   };
 
@@ -56,8 +107,32 @@ export default function Home() {
   }
 
   // If authenticated, swap the view to our dashboard automatically
-  if (user && encryptionKey) {
+  if (user && encryptionKey && !showBiometricEnroll) {
     return <Dashboard />;
+  }
+
+  if (showBiometricEnroll) {
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-[#800c14] via-[#4a0409] to-[#0c0d14] text-slate-100 flex items-center justify-center p-6">
+        <div className="w-full max-w-md bg-black/30 backdrop-blur-md rounded-2xl p-8 border border-white/10 text-center shadow-2xl">
+          <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center text-red-950 mx-auto mb-6 text-2xl shadow-xl">
+            🧬
+          </div>
+          <h2 className="text-xl font-black uppercase tracking-widest mb-2">Enable Biometrics?</h2>
+          <p className="text-[10px] text-red-200/60 font-black uppercase tracking-widest mb-8 leading-relaxed">
+            SECURE YOUR PERIMETER WITH {biometryType || 'BIOMETRIC'} ACCESS
+          </p>
+          <div className="space-y-3">
+            <button
+              onClick={handleEnrollConfirm}
+              className="w-full py-3 bg-white text-red-950 text-xs font-black uppercase tracking-widest rounded-xl transition-all hover:bg-neutral-200"
+            >
+              YES, AUTHORIZE {biometryType || 'BIOMETRICS'}
+            </button>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -112,6 +187,18 @@ export default function Home() {
           >
             {loading ? 'PROCESSING MATH...' : isSignUp ? 'CREATE SECURE ACCOUNT' : 'ACCESS VAULT'}
           </button>
+
+          {!isSignUp && isBiometricEnrolled && (
+            <button
+              type="button"
+              onClick={handleBiometricLogin}
+              disabled={loading}
+              className="w-full mt-3 py-3 bg-black/40 hover:bg-black/60 text-white text-xs font-black uppercase tracking-widest rounded-xl border border-white/10 shadow-xl transition-all transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              <span className="text-lg">🧬</span>
+              USE {biometryType || 'BIOMETRICS'}
+            </button>
+          )}
         </form>
 
         {message && (

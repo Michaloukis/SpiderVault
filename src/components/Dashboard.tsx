@@ -20,7 +20,14 @@ interface VaultItem {
 }
 
 export default function Dashboard() {
-  const { user, encryptionKey, signOut } = useVault();
+  const {
+    user,
+    encryptionKey,
+    signOut,
+    isBiometricEnrolled,
+    unenrollBiometrics,
+    biometricSupported
+  } = useVault();
   
   // State for managing items
   const [items, setItems] = useState<VaultItem[]>([]);
@@ -286,8 +293,16 @@ export default function Dashboard() {
           </form>
         </div>
 
-        <div className="mt-8 pt-4 border-t border-white/10 text-center">
-          <p className="text-[10px] text-red-300/50 truncate mb-3 font-mono tracking-wider">{user?.email}</p>
+        <div className="mt-8 pt-4 border-t border-white/10 text-center space-y-2">
+          {biometricSupported && isBiometricEnrolled && (
+            <button
+              onClick={unenrollBiometrics}
+              className="w-full py-2 bg-black/20 hover:bg-black/40 text-red-300/40 hover:text-red-300 text-[9px] font-bold uppercase tracking-widest border border-white/5 rounded-lg transition-all"
+            >
+              Disable Biometrics
+            </button>
+          )}
+          <p className="text-[10px] text-red-300/50 truncate mb-1 font-mono tracking-wider">{user?.email}</p>
           <button onClick={signOut} className="w-full py-2 bg-black/30 hover:bg-red-600/30 text-red-200/60 hover:text-white border border-white/5 hover:border-red-500/30 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all">
             Secure Lockout
           </button>

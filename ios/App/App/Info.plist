@@ -47,5 +47,7 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>SpiderVault uses Face ID to securely unlock your vault and decrypt your sensitive information without typing your master password.</string>
 </dict>
 </plist>
