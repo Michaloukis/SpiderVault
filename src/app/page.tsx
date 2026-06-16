@@ -68,14 +68,11 @@ export default function Home() {
         
         {/* Header section matching the new theme logo structure */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-red-950 shadow-xl shadow-black/40 font-bold text-xl mb-3">
-            🕷️
-          </div>
           <h1 className="text-2xl font-black uppercase tracking-widest text-white text-center">
             SPIDER-VAULT
           </h1>
           <p className="text-[10px] uppercase tracking-widest text-red-300/70 font-extrabold mt-1 text-center">
-            Zero-Knowledge Password & ID Manager
+            Sensitive information mananger'
           </p>
         </div>
 
