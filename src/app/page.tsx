@@ -72,7 +72,7 @@ export default function Home() {
             SPIDER-VAULT
           </h1>
           <p className="text-[10px] uppercase tracking-widest text-red-300/70 font-extrabold mt-1 text-center">
-            Sensitive information mananger'
+            Sensitive information mananger
           </p>
         </div>
 
