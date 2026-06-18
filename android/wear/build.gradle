@@ -1,14 +1,19 @@
-apply plugin: 'com.android.application'
-apply plugin: 'org.jetbrains.kotlin.android'
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+def wearComposeVersion = '1.3.0'
+def composeBomVersion = '2024.04.01'
 
 android {
     namespace 'com.yourname.spidervault'
-    compileSdk 36
+    compileSdk 34
 
     defaultConfig {
         applicationId "com.yourname.spidervault"
-        minSdkVersion 30
-        targetSdkVersion 36
+        minSdk 30
+        targetSdk 34
         versionCode 1
         versionName "1.0"
         vectorDrawables {
@@ -18,24 +23,30 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
+
     kotlinOptions {
-        jvmTarget = '11'
+        jvmTarget = '17'
     }
+
     buildFeatures {
         compose true
     }
+
     composeOptions {
-        kotlinCompilerExtensionVersion '1.5.15'
+        kotlinCompilerExtensionVersion '1.5.4'
     }
-    packagingOptions {
+
+    packaging {
         resources {
             excludes += '/META-INF/{AL2.0,LGPL2.1}'
         }
@@ -43,23 +54,36 @@ android {
 }
 
 dependencies {
-    implementation 'androidx.core:core-ktx:1.15.0'
-    implementation 'com.google.android.gms:play-services-wearable:19.0.0'
+    // Wear OS Core Libraries
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'com.google.android.gms:play-services-wearable:18.1.0'
     implementation 'androidx.percentlayout:percentlayout:1.0.0'
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
-    implementation 'androidx.recyclerview:recyclerview:1.4.0'
-    
-    // Compose for Wear OS
-    implementation "androidx.wear.compose:compose-material3:$wearComposeVersion"
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+
+    // Jetpack Compose Integration
+    implementation platform("androidx.compose:compose-bom:$composeBomVersion")
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+
+    // Wear OS Specific Material 2 & Foundation Components
+    implementation "androidx.wear.compose:compose-material:$wearComposeVersion"
     implementation "androidx.wear.compose:compose-foundation:$wearComposeVersion"
     implementation "androidx.wear.compose:compose-navigation:$wearComposeVersion"
-    implementation "androidx.wear.compose:compose-ui-tooling:$wearComposeVersion"
-    implementation "androidx.activity:activity-compose:1.11.0"
-    implementation "androidx.compose.ui:ui-tooling-preview"
-    
-    // Networking & JSON
-    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    implementation 'org.json:json:20250107'
-    
-    implementation platform('androidx.compose:compose-bom:2025.02.00')
+
+    // Wear OS Material 3 Design Components
+    implementation "androidx.wear.compose:compose-material3:1.0.0-alpha20"
+
+    // OkHttp Network Library for API Requests
+    implementation "com.squareup.okhttp3:okhttp:4.12.0"
+
+    // Lifecycle & Activity Utilities
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+    implementation 'androidx.activity:activity-compose:1.8.2'
+
+    // Tooling testing wrappers
+    androidTestImplementation platform("androidx.compose:compose-bom:$composeBomVersion")
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+    debugImplementation 'androidx.compose.ui:ui-test-manifest'
 }

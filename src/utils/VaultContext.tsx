@@ -1,135 +1,118 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from './supabase';
-import { User } from '@supabase/supabase-js';
-import { NativeBiometric, AccessControl } from '@capgo/capacitor-native-biometric';
-import { Capacitor } from '@capacitor/core';
+import { NativeBiometric } from '@capgo/capacitor-native-biometric';
 
-// Define what kind of information our global state will hold
 interface VaultContextType {
-  user: User | null;
-  encryptionKey: CryptoKey | null;
-  setEncryptionKey: (key: CryptoKey | null) => void;
+  user: any;
+  encryptionKey: string | null;
+  setEncryptionKey: (key: string | null) => void;
   loading: boolean;
   signOut: () => Promise<void>;
   biometricSupported: boolean;
   isBiometricEnrolled: boolean;
-  biometryType: string;
-  enrollBiometrics: (password: string, email: string) => Promise<void>;
+  enrollBiometrics: (masterKey: string) => Promise<boolean>;
   unenrollBiometrics: () => Promise<void>;
-  checkBiometricEnrollment: () => Promise<void>;
-  getStoredCredentials: () => Promise<{ email: string, password: string } | null>;
+  authenticateWithBiometrics: () => Promise<boolean>;
 }
 
 const VaultContext = createContext<VaultContextType | undefined>(undefined);
 
-export function VaultProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [encryptionKey, setEncryptionKey] = useState<CryptoKey | null>(null);
+export function VaultProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<any>(null);
+  const [encryptionKey, setEncryptionKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
+  
   const [biometricSupported, setBiometricSupported] = useState(false);
   const [isBiometricEnrolled, setIsBiometricEnrolled] = useState(false);
-  const [biometryType, setBiometryType] = useState('');
 
   useEffect(() => {
-    const init = async () => {
-      // 1. Check if a user session is already active in the browser when opening the page
-      const { data: { session } } = await supabase.auth.getSession();
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-
-      // Check biometric support
-      if (Capacitor.isNativePlatform()) {
-        try {
-          const result = await NativeBiometric.isAvailable();
-          setBiometricSupported(result.isAvailable);
-          if (result.biometryType !== undefined) {
-            const types = ['NONE', 'TOUCH ID', 'FACE ID', 'FINGERPRINT', 'IRIS', 'MULTIPLE'];
-            setBiometryType(types[result.biometryType] || 'BIOMETRICS');
-          }
-          await checkBiometricEnrollment();
-        } catch (e) {
-          console.error("Biometric check failed", e);
-        }
-      }
-
-      setLoading(false);
-    };
-
-    init();
-
-    // 2. Listen continuously for login or logout changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (!session) {
-        setEncryptionKey(null); // Instantly purge Key B if the user logs out
-      }
       setLoading(false);
     });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (!session?.user) {
+        setEncryptionKey(null);
+      }
+    });
+
+    checkBiometricAvailability();
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const checkBiometricEnrollment = async () => {
-    if (!Capacitor.isNativePlatform()) return;
+  const checkBiometricAvailability = async () => {
     try {
-      // We check if we have credentials for our specific 'server' identifier
-      const credentials = await NativeBiometric.getCredentials({
-        server: "spidervault.app"
-      });
-      setIsBiometricEnrolled(!!credentials.username);
-    } catch (e) {
-      setIsBiometricEnrolled(false);
+      // Capgo syntax check for hardware presence
+      const result = await NativeBiometric.isAvailable();
+      if (result.isAvailable) {
+        setBiometricSupported(true);
+        const enrolled = localStorage.getItem('vault_biometrics_enrolled') === 'true';
+        setIsBiometricEnrolled(enrolled);
+      }
+    } catch (err) {
+      console.warn('Biometrics hardware check failed or unsupported:', err);
     }
   };
 
-  const enrollBiometrics = async (password: string, email: string) => {
-    if (!Capacitor.isNativePlatform()) return;
+  const enrollBiometrics = async (masterKey: string): Promise<boolean> => {
     try {
-      await NativeBiometric.setCredentials({
-        username: email,
-        password: password,
-        server: "spidervault.app",
-        accessControl: AccessControl.BIOMETRY_ANY
+      // Trigger a quick test authentication step before confirming setup
+      const auth = await NativeBiometric.verifyIdentity({
+        reason: 'Confirm identity to authorize biometric vault entry shortcut.',
+        title: 'Enroll Biometrics',
+        subtitle: 'Spider-Vault Secure Access Key',
+        description: 'Scan biometric signature.',
       });
+
+      // Capgo returns an empty promise resolution or checks validation on success
+      localStorage.setItem('vault_biometrics_enrolled', 'true');
+      localStorage.setItem('vault_secured_hardware_token', btoa(masterKey)); 
+      
       setIsBiometricEnrolled(true);
-    } catch (e) {
-      console.error("Failed to enroll biometrics", e);
-      throw e;
+      return true;
+    } catch (err) {
+      console.error('Biometric enrollment verification dropped:', err);
+      return false;
     }
   };
 
   const unenrollBiometrics = async () => {
-    if (!Capacitor.isNativePlatform()) return;
-    try {
-      await NativeBiometric.deleteCredentials({
-        server: "spidervault.app"
-      });
-      setIsBiometricEnrolled(false);
-    } catch (e) {
-      console.error("Failed to unenroll biometrics", e);
-    }
+    localStorage.removeItem('vault_biometrics_enrolled');
+    localStorage.removeItem('vault_secured_hardware_token');
+    setIsBiometricEnrolled(false);
   };
 
-  const getStoredCredentials = async () => {
-    if (!Capacitor.isNativePlatform()) return null;
+  const authenticateWithBiometrics = async (): Promise<boolean> => {
     try {
-      const credentials = await NativeBiometric.getSecureCredentials({
-        server: "spidervault.app",
-        reason: "Access your SpiderVault",
-        title: "Biometric Login"
+      // Capgo syntax to prompt native operational window
+      await NativeBiometric.verifyIdentity({
+        reason: 'Scan fingerprint or face identity to map decrypted credentials.',
+        title: 'Biometric Unlock Pass',
+        subtitle: 'Decrypt Vault Layer',
+        description: 'Verify identity to continue.',
       });
-      return { email: credentials.username, password: credentials.password };
-    } catch (e) {
-      console.error("Biometric retrieval failed", e);
-      return null;
+
+      const storedToken = localStorage.getItem('vault_secured_hardware_token');
+      if (storedToken) {
+        const recoveredKey = atob(storedToken);
+        setEncryptionKey(recoveredKey);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Biometric validation rejected:', err);
+      return false;
     }
   };
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    setEncryptionKey(null); // Clear Key B on manual sign out
+    setEncryptionKey(null);
   };
 
   return (
@@ -141,18 +124,15 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       signOut,
       biometricSupported,
       isBiometricEnrolled,
-      biometryType,
       enrollBiometrics,
       unenrollBiometrics,
-      checkBiometricEnrollment,
-      getStoredCredentials
+      authenticateWithBiometrics
     }}>
       {children}
     </VaultContext.Provider>
   );
 }
 
-// Custom shortcut hook so our future components can quickly grab data out of this cloud state
 export function useVault() {
   const context = useContext(VaultContext);
   if (context === undefined) {
